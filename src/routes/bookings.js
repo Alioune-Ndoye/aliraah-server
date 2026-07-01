@@ -5,6 +5,7 @@ import { Booking } from '../models/Booking.js';
 import { config } from '../config.js';
 import { writeLimiter, requireAdmin, adminAuthLimiter } from '../middleware/security.js';
 import { customerFromReq } from '../lib/auth.js';
+import { notifyOwner, bookingSms } from '../lib/notify.js';
 
 export const bookingsRouter = Router();
 
@@ -62,6 +63,11 @@ bookingsRouter.post('/', writeLimiter, async (req, res, next) => {
       ipHash: hashIp(req.ip || ''),
       userAgent: (req.get('user-agent') || '').slice(0, 256),
     });
+
+    // Text the owner right away (carrier email-to-SMS gateway). Fire-and-forget
+    // so a slow/failed alert never delays or breaks the customer's booking.
+    notifyOwner(bookingSms(doc)).catch(() => {});
+
     res.status(201).json({ ok: true, id: doc._id.toString() });
   } catch (err) {
     next(err);

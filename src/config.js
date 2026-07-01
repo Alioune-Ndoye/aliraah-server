@@ -54,10 +54,26 @@ export const config = {
     // How long to cache Google's response (minutes) — avoids per-request billing.
     cacheTtlMs: (Number(process.env.GOOGLE_CACHE_TTL_MIN) || 360) * 60 * 1000,
   },
+
+  // ── Owner SMS alerts via carrier email-to-SMS gateway (no Twilio) ──
+  // Sends a text straight to your phone through your carrier's free
+  // email-to-SMS gateway. Requires SMTP creds to send the email.
+  sms: {
+    host: (process.env.SMTP_HOST || '').trim(),
+    port: Number(process.env.SMTP_PORT) || 587,
+    user: (process.env.SMTP_USER || '').trim(),
+    pass: process.env.SMTP_PASS || '',
+    from: (process.env.SMS_FROM || process.env.SMTP_USER || '').trim(),
+    // Full gateway address, e.g. 8608950233@sms.myboostmobile.com (Boost Mobile).
+    to: (process.env.SMS_TO || '').trim(),
+  },
 };
 
 export const googleConfigured = () =>
   Boolean(config.google.apiKey && config.google.placeId);
+
+export const smsConfigured = () =>
+  Boolean(config.sms.host && config.sms.user && config.sms.pass && config.sms.to);
 
 if (!config.adminToken && isProd) {
   console.error('[config] ADMIN_TOKEN is required in production. Refusing to start.');
