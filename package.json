@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Secure API for the Aalirah React app — stores customer reviews in MongoDB.",
+  "description": "Secure API for the Aliraah React app — customer accounts, bookings, reviews, admin CRM.",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
