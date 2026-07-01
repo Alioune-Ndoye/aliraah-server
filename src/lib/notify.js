@@ -29,7 +29,7 @@ async function sendViaTextbelt(text) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       phone: config.sms.phone,
-      message: String(text).slice(0, 300),
+      message: String(text).slice(0, 900),
       key: config.sms.textbeltKey,
     }),
   });
@@ -44,7 +44,7 @@ async function sendViaEmailGateway(text) {
     from: config.sms.from,
     to: config.sms.to,
     subject: '',
-    text: String(text).slice(0, 300),
+    text: String(text).slice(0, 900),
   });
   console.log('[notify] SMS sent via email gateway.');
 }
@@ -64,11 +64,32 @@ export async function notifyOwner(text) {
   }
 }
 
-/** Short one-line summary of a new booking for a text message. */
+/** Full, readable text of a new booking/quote — every detail the owner needs. */
 export function bookingSms(b) {
+  const label = b.kind === 'quote' ? 'NEW QUOTE REQUEST' : 'NEW BOOKING';
   const name = `${b.firstName || ''} ${b.lastName || ''}`.trim();
+  const addr = [b.street, b.apt, b.city, b.state, b.zip].filter(Boolean).join(', ');
+  const svc = [b.size, b.bedrooms, b.bathrooms].filter(Boolean).join(' / ');
   const when = [b.date, b.time].filter(Boolean).join(' ');
-  const money = b.estimatedTotal ? ` $${Math.round(b.estimatedTotal)}` : '';
-  const label = b.kind === 'quote' ? 'Quote request' : 'New booking';
-  return `${label}: ${name}${money} ${b.frequency || ''} ${when} ${b.phone || ''}`.replace(/\s+/g, ' ').trim();
+  const extras = Array.isArray(b.extras) && b.extras.length ? b.extras.join(', ') : '';
+
+  const lines = [
+    `${label} - Aliraah`,
+    name && `Name: ${name}`,
+    b.phone && `Phone: ${b.phone}`,
+    // Obfuscate the email so unverified SMS keys don't flag it as a link.
+    // (Whitelist the key to show it as a normal tappable address.)
+    b.email && `Email: ${b.email.replace('@', ' (at) ').replace(/\.(?=[a-z]{2,})/gi, ' (dot) ')}`,
+    addr && `Address: ${addr}`,
+    svc && `Home: ${svc}`,
+    b.frequency && `Frequency: ${b.frequency}`,
+    extras && `Extras: ${extras}`,
+    when && `When: ${when}`,
+    b.access && `Access: ${b.access}`,
+    b.estimatedTotal ? `Est. total: $${Math.round(b.estimatedTotal)}` : '',
+    b.tip ? `Tip: $${Math.round(b.tip)}` : '',
+    b.notes && `Notes: ${b.notes}`,
+  ].filter(Boolean);
+
+  return lines.join('\n');
 }
