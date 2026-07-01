@@ -59,12 +59,18 @@ export const config = {
   // Sends a text straight to your phone through your carrier's free
   // email-to-SMS gateway. Requires SMTP creds to send the email.
   sms: {
+    // Owner's phone (raw digits) — used by real SMS providers like TextBelt.
+    phone: (process.env.SMS_PHONE || '').replace(/[^0-9]/g, ''),
+
+    // Preferred: a real SMS API (reliable). TextBelt = pay-as-you-go, no monthly fee.
+    textbeltKey: (process.env.TEXTBELT_KEY || '').trim(),
+
+    // Fallback: carrier email-to-SMS gateway (free but unreliable).
     host: (process.env.SMTP_HOST || '').trim(),
     port: Number(process.env.SMTP_PORT) || 587,
     user: (process.env.SMTP_USER || '').trim(),
     pass: process.env.SMTP_PASS || '',
     from: (process.env.SMS_FROM || process.env.SMTP_USER || '').trim(),
-    // Full gateway address, e.g. 8608950233@sms.myboostmobile.com (Boost Mobile).
     to: (process.env.SMS_TO || '').trim(),
   },
 };
@@ -72,8 +78,13 @@ export const config = {
 export const googleConfigured = () =>
   Boolean(config.google.apiKey && config.google.placeId);
 
-export const smsConfigured = () =>
-  Boolean(config.sms.host && config.sms.user && config.sms.pass && config.sms.to);
+/** Reliable SMS via TextBelt is preferred; email gateway is the fallback. */
+export const smsProvider = () => {
+  if (config.sms.textbeltKey && config.sms.phone) return 'textbelt';
+  if (config.sms.host && config.sms.user && config.sms.pass && config.sms.to) return 'email';
+  return 'none';
+};
+export const smsConfigured = () => smsProvider() !== 'none';
 
 if (!config.adminToken && isProd) {
   console.error('[config] ADMIN_TOKEN is required in production. Refusing to start.');

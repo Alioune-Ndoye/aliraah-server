@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { config, smsConfigured } from '../config.js';
+import { config, smsConfigured, smsProvider } from '../config.js';
 
 /**
  * Owner SMS alerts via a carrier email-to-SMS gateway (e.g. Boost Mobile:
@@ -22,21 +22,43 @@ function getTransport() {
   return transporter;
 }
 
+/** Reliable SMS via TextBelt (pay-as-you-go HTTP API). */
+async function sendViaTextbelt(text) {
+  const res = await fetch('https://textbelt.com/text', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      phone: config.sms.phone,
+      message: String(text).slice(0, 300),
+      key: config.sms.textbeltKey,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!data.success) throw new Error(data.error || 'TextBelt send failed');
+  console.log(`[notify] SMS sent via TextBelt (quota left: ${data.quotaRemaining}).`);
+}
+
+/** Free-but-unreliable fallback: carrier email-to-SMS gateway. */
+async function sendViaEmailGateway(text) {
+  await getTransport().sendMail({
+    from: config.sms.from,
+    to: config.sms.to,
+    subject: '',
+    text: String(text).slice(0, 300),
+  });
+  console.log('[notify] SMS sent via email gateway.');
+}
+
 /** Fire-and-forget text to the owner. Never throws into the request path. */
 export async function notifyOwner(text) {
-  if (!smsConfigured()) {
+  const provider = smsProvider();
+  if (provider === 'none') {
     console.warn('[notify] SMS not configured — skipping alert.');
     return;
   }
   try {
-    await getTransport().sendMail({
-      from: config.sms.from,
-      to: config.sms.to,
-      // Carrier gateways ignore/echo the subject; keep the body short.
-      subject: '',
-      text: String(text).slice(0, 300),
-    });
-    console.log('[notify] SMS alert sent.');
+    if (provider === 'textbelt') await sendViaTextbelt(text);
+    else await sendViaEmailGateway(text);
   } catch (err) {
     console.error('[notify] SMS send failed:', err.message);
   }

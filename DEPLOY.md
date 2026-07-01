@@ -33,24 +33,26 @@ In **Vercel** → the `aalirah` project → **Settings → Environment Variables
 
 Then **redeploy** the frontend. Booking, login, reviews, and the dashboard will now work.
 
-## Owner SMS alerts (text on every booking — no Twilio)
-The API can text you on each new booking via your carrier's free **email-to-SMS gateway**.
-Set these env vars (locally in `.env`, or on Render):
+## Owner SMS alerts (text on every booking)
+The API texts you on each new booking. It picks a provider automatically:
+
+### Preferred — TextBelt (reliable, pay-as-you-go, no monthly fee)
+1. Buy a key at <https://textbelt.com> (e.g. $5 ≈ hundreds of texts).
+2. Set:
 
 | Key | Value |
 |-----|-------|
-| `SMS_TO` | `8608950233@sms.myboostmobile.com` (your Boost number @ Boost's gateway) |
-| `SMTP_HOST` | e.g. `smtp.gmail.com` |
-| `SMTP_PORT` | `587` |
-| `SMTP_USER` | the email address that sends the alert |
-| `SMTP_PASS` | that account's **App Password** (Gmail: myaccount.google.com → Security → App passwords) |
-| `SMS_FROM` | *(optional)* defaults to `SMTP_USER` |
+| `SMS_PHONE` | `8608950233` (your mobile, digits only) |
+| `TEXTBELT_KEY` | your TextBelt API key |
 
-If these aren't set, the alert is skipped and booking still works.
+That's it — reliable texts, no email needed.
 
-> Note: carrier email-to-SMS gateways are unofficial and can be delayed or occasionally
-> dropped, and Boost's gateway support has varied. If texts don't arrive, confirm the
-> gateway domain for your Boost account, or switch to a paid SMS API later.
+### Fallback — carrier email-to-SMS gateway (free but unreliable)
+Only used if `TEXTBELT_KEY` is not set. Requires SMTP creds:
+`SMS_TO`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMS_FROM`.
+Note: carrier gateways (esp. Boost) frequently drop mail — not recommended.
+
+If nothing is configured, the alert is skipped and booking still works.
 
 ## Notes
 - **Cookies:** in production the API sets `SameSite=None; Secure` session cookies automatically (`NODE_ENV=production`). For these to work across `aliraah.com` ↔ the API, both must be HTTPS (Render + Vercel both are).
