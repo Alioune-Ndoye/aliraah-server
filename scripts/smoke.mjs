@@ -11,6 +11,14 @@ process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.JWT_SECRET = 'test-jwt-secret-value';
 process.env.NODE_ENV = 'test';
 process.env.PORT = '4555';
+// Never send real owner alerts (SMS/email) from tests — blank out providers
+// even if the local .env has them configured.
+process.env.TEXTBELT_KEY = '';
+process.env.SMS_PHONE = '';
+process.env.SMTP_HOST = '';
+process.env.SMTP_USER = '';
+process.env.SMTP_PASS = '';
+process.env.SMS_TO = '';
 
 const { connectDb, disconnectDb } = await import('../src/db.js');
 const { createApp } = await import('../src/app.js');
@@ -176,6 +184,29 @@ try {
   // logout clears the session
   const lo = await post('/api/auth/logout', {}, { Cookie: loginCookie });
   ok('logout clears cookie', lo.status === 200 && /aliraah_session=;|Expires=Thu, 01 Jan 1970/.test(lo.headers.get('set-cookie') || ''));
+
+  // ── Site settings (admin feature toggles) ────────────────────────
+  const s0 = await (await get('/api/settings')).json();
+  ok('settings default OFF', s0.settings.showGuarantee === false && s0.settings.showSpecials === false);
+
+  const sNoAuth = await fetch(`${base}/api/settings`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ showSpecials: true }),
+  });
+  ok('settings PATCH needs admin', sNoAuth.status === 401);
+
+  const sOn = await fetch(`${base}/api/settings`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...auth2 }, body: JSON.stringify({ showSpecials: true, showGuarantee: true }),
+  });
+  const sOnBody = await sOn.json();
+  ok('admin enables toggles', sOn.status === 200 && sOnBody.settings.showSpecials === true && sOnBody.settings.showGuarantee === true);
+
+  const s1 = await (await get('/api/settings')).json();
+  ok('toggles persist publicly', s1.settings.showSpecials === true && s1.settings.showGuarantee === true);
+
+  const sBad = await fetch(`${base}/api/settings`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...auth2 }, body: JSON.stringify({ hacked: true }),
+  });
+  ok('settings rejects unknown fields', sBad.status === 400);
 } finally {
   server.close();
   await disconnectDb();
