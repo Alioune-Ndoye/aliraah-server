@@ -122,13 +122,29 @@ try {
     phone: '8601112222', street: '10 Byron Rd', city: 'West Hartford', state: 'CT', zip: '06117',
   });
   const suBody = await su.json();
-  const cookie = cookieOf(su);
-  ok('signup succeeds (201)', su.status === 201);
-  ok('signup returns AL- account number', /^AL-\d{6}$/.test(suBody.customer?.accountNumber || ''));
-  ok('signup sets session cookie', cookie.startsWith('aliraah_session='));
-  ok('signup never leaks passwordHash', !('passwordHash' in (suBody.customer || {})));
+  ok('signup succeeds (201) as pending', su.status === 201 && suBody.pending === true);
+  ok('signup gives NO session cookie (owner approval required)', cookieOf(su) === '');
+  ok('signup exposes code only in test env', /^\d{6}$/.test(suBody.devCode || ''));
 
   ok('duplicate email rejected (409)', (await post('/api/auth/signup', { firstName: 'Ada', email: 'ada@example.com', password: 'sup3rsecret!' })).status === 409);
+
+  // login before approval → 403 pending (even with the right password)
+  const preLogin = await post('/api/auth/login', { email: 'ada@example.com', password: 'sup3rsecret!' });
+  ok('login before approval → 403 pending', preLogin.status === 403 && (await preLogin.json()).pending === true);
+
+  // wrong code rejected; correct code activates + signs in
+  ok('wrong code rejected', (await post('/api/auth/verify', { email: 'ada@example.com', code: '000000' })).status === 401);
+  const ver = await post('/api/auth/verify', { email: 'ada@example.com', code: suBody.devCode });
+  const verBody = await ver.json();
+  const cookie = cookieOf(ver);
+  ok('correct code verifies + signs in', ver.status === 200 && verBody.verified === true && cookie.startsWith('aliraah_session='));
+  ok('verify returns AL- account number', /^AL-\d{6}$/.test(verBody.customer?.accountNumber || ''));
+  ok('verify never leaks passwordHash', !('passwordHash' in (verBody.customer || {})));
+  ok('code is single-use', (await post('/api/auth/verify', { email: 'ada@example.com', code: suBody.devCode })).status === 200 && !cookieOf(await post('/api/auth/verify', { email: 'ada@example.com', code: suBody.devCode })).startsWith('aliraah_session='));
+
+  // resend is generic (no user enumeration)
+  const rs = await post('/api/auth/resend-code', { email: 'ghost@example.com' });
+  ok('resend-code is generic for unknown emails', rs.status === 200 && (await rs.json()).ok === true);
 
   // /me with cookie
   const me = await (await get('/api/auth/me', { Cookie: cookie })).json();
@@ -142,7 +158,7 @@ try {
 
   const login = await post('/api/auth/login', { email: 'ada@example.com', password: 'sup3rsecret!' });
   const loginCookie = cookieOf(login);
-  ok('login succeeds', login.status === 200 && loginCookie.startsWith('aliraah_session='));
+  ok('login succeeds after approval', login.status === 200 && loginCookie.startsWith('aliraah_session='));
 
   // account bookings require auth
   ok('account bookings need cookie', (await get('/api/account/bookings')).status === 401);

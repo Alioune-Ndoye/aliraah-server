@@ -33,6 +33,13 @@ const customerSchema = new mongoose.Schema(
     status: { type: String, enum: ['active', 'suspended'], default: 'active', index: true },
     notes: { type: String, trim: true, maxlength: 2000, default: '' }, // admin notes
 
+    // Owner-approval gate: accounts start unverified. On signup, an access
+    // code is texted to the BUSINESS OWNER, who forwards it to the customer.
+    // The account only activates once the customer enters that code.
+    verified: { type: Boolean, default: false, index: true },
+    verifyCodeHash: { type: String, default: '' },
+    verifyCodeExpires: { type: Date },
+
     lastLoginAt: { type: Date },
   },
   { timestamps: true, strict: 'throw', minimize: true }
@@ -57,6 +64,7 @@ customerSchema.methods.toPublic = function toPublic() {
     recurring: this.recurring,
     avatarUrl: this.avatarUrl,
     status: this.status,
+    verified: this.verified,
     createdAt: this.createdAt,
   };
 };

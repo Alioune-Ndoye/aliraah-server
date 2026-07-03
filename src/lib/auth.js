@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'node:crypto';
 import { Customer } from '../models/Customer.js';
 import { config } from '../config.js';
 
@@ -45,12 +46,27 @@ export async function customerFromReq(req) {
   try {
     const { sub } = jwt.verify(token, config.jwtSecret);
     const c = await Customer.findById(sub);
-    if (!c || c.status !== 'active') return null;
+    // Unverified accounts never get a session — belt-and-braces check here too.
+    if (!c || c.status !== 'active' || !c.verified) return null;
     return c;
   } catch {
     return null;
   }
 }
+
+/* ── Owner-approval access codes ──────────────────────────────────────
+   On signup a 6-digit code is texted to the business owner, who forwards
+   it to the customer. Only a matching code activates the account. */
+
+export function generateVerifyCode() {
+  return String(crypto.randomInt(100000, 1000000)); // 6 digits, crypto RNG
+}
+
+export function hashVerifyCode(code) {
+  return crypto.createHash('sha256').update(`${config.jwtSecret}:${code}`).digest('hex');
+}
+
+export const VERIFY_CODE_TTL_MS = 24 * 60 * 60 * 1000; // owner may take a while to forward
 
 /** Middleware: require a logged-in customer, attaches req.customer. */
 export async function requireCustomer(req, res, next) {
