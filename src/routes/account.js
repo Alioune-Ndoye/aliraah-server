@@ -15,6 +15,8 @@ accountRouter.get('/bookings', requireCustomer, async (req, res, next) => {
     })
       .sort({ createdAt: -1 })
       .limit(200)
+      // Customer-visible crew info: cleaner's first name only.
+      .populate('cleanerId', 'firstName')
       .lean()
       .exec();
     res.json({ bookings: docs });

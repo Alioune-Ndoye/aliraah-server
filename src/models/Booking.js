@@ -17,6 +17,16 @@ const bookingSchema = new mongoose.Schema(
     // Guest bookings leave this unset. Never trusted from the client payload.
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', index: true },
 
+    // Crew dispatch — separate from the admin pipeline `status`, so assigning
+    // a cleaner never disturbs the owner's new/contacted/scheduled workflow.
+    cleanerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cleaner', index: true },
+    dispatch: {
+      type: String,
+      enum: ['none', 'offered', 'accepted', 'declined', 'on_the_way', 'in_progress', 'done'],
+      default: 'none',
+      index: true,
+    },
+
     // Contact
     firstName: { type: String, required: true, trim: true, maxlength: 80 },
     lastName: { type: String, trim: true, maxlength: 80, default: '' },

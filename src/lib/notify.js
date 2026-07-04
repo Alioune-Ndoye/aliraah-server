@@ -23,12 +23,12 @@ function getTransport() {
 }
 
 /** Reliable SMS via TextBelt (pay-as-you-go HTTP API). */
-async function sendViaTextbelt(text) {
+async function sendViaTextbelt(text, phone = config.sms.phone) {
   const res = await fetch('https://textbelt.com/text', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      phone: config.sms.phone,
+      phone,
       message: String(text).slice(0, 900),
       key: config.sms.textbeltKey,
     }),
@@ -36,6 +36,21 @@ async function sendViaTextbelt(text) {
   const data = await res.json().catch(() => ({}));
   if (!data.success) throw new Error(data.error || 'TextBelt send failed');
   console.log(`[notify] SMS sent via TextBelt (quota left: ${data.quotaRemaining}).`);
+}
+
+/** Fire-and-forget text to ANY phone (e.g. a cleaner's job offer).
+ *  Requires TextBelt; never throws into the request path. */
+export async function sendSms(phone, text) {
+  const digits = String(phone).replace(/[^0-9]/g, '');
+  if (!config.sms.textbeltKey || !digits) {
+    console.warn('[notify] sendSms skipped (no TextBelt key or bad phone).');
+    return;
+  }
+  try {
+    await sendViaTextbelt(text, digits);
+  } catch (err) {
+    console.error('[notify] sendSms failed:', err.message);
+  }
 }
 
 /** Free-but-unreliable fallback: carrier email-to-SMS gateway. */

@@ -16,6 +16,7 @@ import { authRouter } from './routes/auth.js';
 import { accountRouter } from './routes/account.js';
 import { adminCustomersRouter } from './routes/admin-customers.js';
 import { settingsRouter } from './routes/settings.js';
+import { adminCleanersRouter, crewRouter } from './routes/cleaners.js';
 
 /** Builds the Express app (separated from server bootstrap so tests can import it). */
 export function createApp() {
@@ -42,6 +43,8 @@ export function createApp() {
   app.use('/api/stats', statsRouter);
   app.use('/api/admin/customers', adminCustomersRouter);
   app.use('/api/settings', settingsRouter);
+  app.use('/api/admin/cleaners', adminCleanersRouter);
+  app.use('/api/crew', crewRouter);
 
   // 404
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));

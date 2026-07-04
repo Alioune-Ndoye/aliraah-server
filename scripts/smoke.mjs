@@ -169,6 +169,7 @@ try {
     bedrooms: 'studio', bathrooms: '1bath', frequency: 'Weekly', estimatedTotal: 137,
   }, { Cookie: loginCookie });
   ok('logged-in booking accepted', cbk.status === 201);
+  const adaBid = (await cbk.json()).id;
 
   const myBookings = await (await get('/api/account/bookings', { Cookie: loginCookie })).json();
   ok('portal shows my booking', myBookings.bookings.length >= 1 && myBookings.bookings.some((b) => b.customerId));
@@ -200,6 +201,42 @@ try {
   // logout clears the session
   const lo = await post('/api/auth/logout', {}, { Cookie: loginCookie });
   ok('logout clears cookie', lo.status === 200 && /aliraah_session=;|Expires=Thu, 01 Jan 1970/.test(lo.headers.get('set-cookie') || ''));
+
+  // ── Crew dispatch (cleaners, assignment, accept → done) ─────────
+  ok('cleaners list needs admin', (await get('/api/admin/cleaners')).status === 401);
+
+  const mkCleaner = await fetch(`${base}/api/admin/cleaners`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...auth2 },
+    body: JSON.stringify({ firstName: 'Maria', lastName: 'Gomez', phone: '8605553333' }),
+  });
+  const mkBody = await mkCleaner.json();
+  const crewToken = mkBody.cleaner?.token || '';
+  ok('admin creates cleaner (201)', mkCleaner.status === 201 && /^[a-f0-9]{32}$/.test(crewToken));
+
+  const assign = await fetch(`${base}/api/admin/cleaners/assign/${adaBid}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...auth2 },
+    body: JSON.stringify({ cleanerId: mkBody.cleaner.id }),
+  });
+  ok('admin assigns job (offered)', assign.status === 200 && (await assign.json()).dispatch === 'offered');
+
+  ok('crew page rejects bad token', (await get('/api/crew/deadbeefdeadbeefdeadbeefdeadbeef')).status === 404);
+
+  const crew = await (await get(`/api/crew/${crewToken}`)).json();
+  ok('crew sees offered job', crew.jobs?.length === 1 && crew.jobs[0].dispatch === 'offered');
+  ok('crew job hides price & email', !('estimatedTotal' in crew.jobs[0]) && !('email' in crew.jobs[0]));
+
+  const crewAct = (action) => fetch(`${base}/api/crew/${crewToken}/jobs/${adaBid}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
+  });
+  ok('crew cannot skip to done from offered', (await crewAct('done')).status === 409);
+  ok('crew accepts job', (await (await crewAct('accept')).json()).dispatch === 'accepted');
+  ok('crew on the way', (await (await crewAct('on_the_way')).json()).dispatch === 'on_the_way');
+  ok('crew completes job', (await (await crewAct('done')).json()).dispatch === 'done');
+
+  // Customer portal shows the cleaner's first name + dispatch on their booking.
+  const myB = await (await get('/api/account/bookings', { Cookie: loginCookie })).json();
+  const dispatched = (myB.bookings || []).find((b) => b.dispatch === 'done');
+  ok('customer sees dispatch + cleaner first name', !!dispatched && dispatched.cleanerId?.firstName === 'Maria');
 
   // ── Site settings (admin feature toggles) ────────────────────────
   const s0 = await (await get('/api/settings')).json();
