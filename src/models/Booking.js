@@ -17,6 +17,11 @@ const bookingSchema = new mongoose.Schema(
     // Guest bookings leave this unset. Never trusted from the client payload.
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', index: true },
 
+    // Property this booking belongs to (PM dashboard grouping). Only set
+    // server-side after verifying the property belongs to the logged-in
+    // customer — never trusted from the raw payload.
+    propertyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Property', index: true },
+
     // Crew dispatch — separate from the admin pipeline `status`, so assigning
     // a cleaner never disturbs the owner's new/contacted/scheduled workflow.
     cleanerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cleaner', index: true },

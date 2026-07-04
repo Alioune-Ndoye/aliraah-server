@@ -54,6 +54,7 @@ const editSchema = z.object({
   city: z.string().trim().max(80).optional(),
   state: z.string().trim().max(16).optional(),
   zip: z.string().trim().max(16).optional(),
+  accountType: z.enum(['residential', 'property_manager']).optional(),
   tier: z.enum(['standard', 'silver', 'gold']).optional(),
   discountRate: z.number().min(0).max(100).optional(),
   recurring: z.boolean().optional(),

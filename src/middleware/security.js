@@ -47,10 +47,12 @@ export const authLimiter = rateLimit({
   message: { error: 'Too many attempts. Please try again later.' },
 });
 
-/** Tight limiter for review submission — discourages spam/abuse. */
+/** Tight limiter for public submissions (reviews + bookings share it) —
+ *  discourages spam/abuse. WRITE_LIMIT_MAX is only overridden by the test
+ *  runner, which fires many submissions from one IP. */
 export const writeLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 8,
+  max: Number(process.env.WRITE_LIMIT_MAX) || 8,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many submissions. Please try again later.' },

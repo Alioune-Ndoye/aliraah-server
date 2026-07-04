@@ -24,6 +24,10 @@ const customerSchema = new mongoose.Schema(
     state: { type: String, trim: true, maxlength: 16, default: '' },
     zip: { type: String, trim: true, maxlength: 16, default: '' },
 
+    // Account kind: property managers get the multi-property dashboard.
+    // Admin-controlled (set from the dashboard's Customers tab).
+    accountType: { type: String, enum: ['residential', 'property_manager'], default: 'residential', index: true },
+
     // Admin-controlled loyalty fields
     tier: { type: String, enum: ['standard', 'silver', 'gold'], default: 'standard', index: true },
     discountRate: { type: Number, min: 0, max: 100, default: 0 },
@@ -53,6 +57,7 @@ customerSchema.methods.toPublic = function toPublic() {
     lastName: this.lastName,
     email: this.email,
     accountNumber: this.accountNumber,
+    accountType: this.accountType,
     phone: this.phone,
     street: this.street,
     apt: this.apt,

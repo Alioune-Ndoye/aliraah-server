@@ -11,6 +11,7 @@ process.env.ADMIN_TOKEN = 'test-admin-token';
 process.env.JWT_SECRET = 'test-jwt-secret-value';
 process.env.NODE_ENV = 'test';
 process.env.PORT = '4555';
+process.env.WRITE_LIMIT_MAX = '100'; // suite fires many submissions from one IP
 // Never send real owner alerts (SMS/email) from tests — blank out providers
 // even if the local .env has them configured.
 process.env.TEXTBELT_KEY = '';
@@ -201,6 +202,50 @@ try {
   // logout clears the session
   const lo = await post('/api/auth/logout', {}, { Cookie: loginCookie });
   ok('logout clears cookie', lo.status === 200 && /aliraah_session=;|Expires=Thu, 01 Jan 1970/.test(lo.headers.get('set-cookie') || ''));
+
+  // ── Property-manager portfolio ───────────────────────────────────
+  ok('properties need cookie', (await get('/api/account/properties')).status === 401);
+
+  const p1 = await post('/api/account/properties', {
+    label: '123 Main St · Unit 2B', street: '123 Main St', apt: '2B', city: 'West Hartford', state: 'CT', zip: '06110',
+    bedrooms: '2 Bedrooms', bathrooms: '1 Bathroom',
+  }, { Cookie: loginCookie });
+  const p1Body = await p1.json();
+  ok('PM adds property (201)', p1.status === 201 && p1Body.property.label === '123 Main St · Unit 2B');
+  const propId = p1Body.property.id;
+
+  const plist = await (await get('/api/account/properties', { Cookie: loginCookie })).json();
+  ok('PM lists own properties', plist.properties.length === 1);
+
+  // Booking linked to a property I own → propertyId persists
+  const pbk = await post('/api/bookings', {
+    firstName: 'Ada', email: 'ada@example.com', phone: '8601112222', frequency: 'Monthly',
+    estimatedTotal: 150, propertyId: propId,
+  }, { Cookie: loginCookie });
+  ok('property booking accepted', pbk.status === 201);
+  const myB2 = await (await get('/api/account/bookings', { Cookie: loginCookie })).json();
+  ok('booking carries propertyId', myB2.bookings.some((b) => String(b.propertyId) === propId));
+
+  // Someone else's propertyId is silently dropped (no cross-account linking)
+  const stranger = await post('/api/bookings', {
+    firstName: 'Guest', email: 'guest@example.com', phone: '8600000000', propertyId: propId,
+  });
+  ok('guest booking accepted', stranger.status === 201);
+  const adminList2 = await (await get('/api/bookings?limit=10', auth2)).json();
+  const guestBk = adminList2.bookings.find((b) => b.email === 'guest@example.com');
+  ok('foreign propertyId NOT honored', guestBk && !guestBk.propertyId);
+
+  // Archive keeps it around for history
+  const arch = await fetch(`${base}/api/account/properties/${propId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Cookie: loginCookie }, body: JSON.stringify({ archived: true }),
+  });
+  ok('PM archives property', arch.status === 200 && (await arch.json()).property.archived === true);
+
+  // Admin flips account type to property_manager
+  const at = await fetch(`${base}/api/admin/customers/${custId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...auth2 }, body: JSON.stringify({ accountType: 'property_manager' }),
+  });
+  ok('admin sets accountType', at.status === 200 && (await at.json()).customer.accountType === 'property_manager');
 
   // ── Crew dispatch (cleaners, assignment, accept → done) ─────────
   ok('cleaners list needs admin', (await get('/api/admin/cleaners')).status === 401);

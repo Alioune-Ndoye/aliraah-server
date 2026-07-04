@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { Booking } from '../models/Booking.js';
+import { Property } from '../models/Property.js';
 import { config } from '../config.js';
 import { writeLimiter, requireAdmin, adminAuthLimiter } from '../middleware/security.js';
 import { customerFromReq } from '../lib/auth.js';
@@ -40,6 +41,9 @@ const createSchema = z.object({
   estimatedHours: z.number().min(0).max(1000).optional().default(0),
   tip: z.number().min(0).max(100000).optional().default(0),
   promoCode: str(40).optional().default(''),
+  // PM dashboard: which saved property this clean is for. Only honored when
+  // the property belongs to the logged-in customer (checked below).
+  propertyId: z.string().regex(/^[a-f0-9]{24}$/i).optional(),
 });
 
 function hashIp(ip) {
@@ -57,9 +61,18 @@ bookingsRouter.post('/', writeLimiter, async (req, res, next) => {
     // Link to the logged-in customer (derived server-side from the cookie).
     const customer = await customerFromReq(req);
 
+    // Honor propertyId only if it belongs to this logged-in customer.
+    const { propertyId, ...bookingData } = parsed.data;
+    let verifiedPropertyId;
+    if (propertyId && customer) {
+      const owns = await Property.exists({ _id: propertyId, customerId: customer._id });
+      if (owns) verifiedPropertyId = propertyId;
+    }
+
     const doc = await Booking.create({
-      ...parsed.data,
+      ...bookingData,
       ...(customer ? { customerId: customer._id } : {}),
+      ...(verifiedPropertyId ? { propertyId: verifiedPropertyId } : {}),
       ipHash: hashIp(req.ip || ''),
       userAgent: (req.get('user-agent') || '').slice(0, 256),
     });
