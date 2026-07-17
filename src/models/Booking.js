@@ -73,6 +73,27 @@ const bookingSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Payment state, shown in the customer portal. Flipped by Stripe webhook
+    // once payments are connected; until then the admin sets it manually.
+    paymentStatus: {
+      type: String,
+      enum: ['unpaid', 'paid', 'refunded'],
+      default: 'unpaid',
+      index: true,
+    },
+
+    // Before/after photos for this clean (URLs; uploads come with object
+    // storage later — for now the admin attaches hosted image links).
+    photos: {
+      type: [
+        {
+          url: { type: String, required: true, trim: true, maxlength: 2048 },
+          kind: { type: String, enum: ['before', 'after'], required: true },
+        },
+      ],
+      default: [],
+    },
+
     // Internal metadata (not exposed publicly)
     ipHash: { type: String, default: '' },
     userAgent: { type: String, maxlength: 256, default: '' },

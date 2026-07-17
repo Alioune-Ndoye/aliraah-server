@@ -119,6 +119,36 @@ bookingsRouter.patch('/:id/status', adminAuthLimiter, requireAdmin, async (req, 
   }
 });
 
+// PATCH /api/bookings/:id/meta — admin sets payment status and/or photos.
+const metaSchema = z
+  .object({
+    paymentStatus: z.enum(['unpaid', 'paid', 'refunded']).optional(),
+    photos: z
+      .array(
+        z.object({
+          url: z.string().trim().url().max(2048).refine((u) => u.startsWith('https://'), 'https only'),
+          kind: z.enum(['before', 'after']),
+        })
+      )
+      .max(24)
+      .optional(),
+  })
+  .strict();
+
+bookingsRouter.patch('/:id/meta', adminAuthLimiter, requireAdmin, async (req, res, next) => {
+  try {
+    if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+    const parsed = metaSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid booking meta' });
+
+    const doc = await Booking.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true, paymentStatus: doc.paymentStatus, photos: doc.photos });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/bookings/export.csv — admin export for Excel/accounting.
 bookingsRouter.get('/export.csv', adminAuthLimiter, requireAdmin, async (_req, res, next) => {
   try {

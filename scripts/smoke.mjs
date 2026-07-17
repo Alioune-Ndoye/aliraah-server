@@ -283,6 +283,39 @@ try {
   const dispatched = (myB.bookings || []).find((b) => b.dispatch === 'done');
   ok('customer sees dispatch + cleaner first name', !!dispatched && dispatched.cleanerId?.firstName === 'Maria');
 
+  // ── Payments scaffold + booking meta (photos / payment status) ───
+  ok('checkout needs login', (await post(`/api/payments/checkout/${adaBid}`, {})).status === 401);
+
+  const co = await post(`/api/payments/checkout/${adaBid}`, {}, { Cookie: loginCookie });
+  const coBody = await co.json();
+  ok('checkout is a graceful 503 until Stripe keys exist', co.status === 503 && coBody.pending === true);
+
+  // Ada can't pay a booking that isn't hers (Jane's guest booking)
+  ok('cannot checkout someone else\'s booking', (await post(`/api/payments/checkout/${bid}`, {}, { Cookie: loginCookie })).status === 404);
+
+  const meta = await fetch(`${base}/api/bookings/${adaBid}/meta`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...auth2 },
+    body: JSON.stringify({ paymentStatus: 'paid', photos: [
+      { url: 'https://example.com/before.jpg', kind: 'before' },
+      { url: 'https://example.com/after.jpg', kind: 'after' },
+    ] }),
+  });
+  const metaBody = await meta.json();
+  ok('admin sets payment + photos', meta.status === 200 && metaBody.paymentStatus === 'paid' && metaBody.photos.length === 2);
+  ok('meta rejects http photo urls', (await fetch(`${base}/api/bookings/${adaBid}/meta`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...auth2 },
+    body: JSON.stringify({ photos: [{ url: 'http://insecure.com/x.jpg', kind: 'before' }] }),
+  })).status === 400);
+  ok('meta needs admin', (await fetch(`${base}/api/bookings/${adaBid}/meta`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentStatus: 'paid' }),
+  })).status === 401);
+
+  const myB3 = await (await get('/api/account/bookings', { Cookie: loginCookie })).json();
+  const paidBk = myB3.bookings.find((b) => String(b._id) === adaBid);
+  ok('portal sees paymentStatus + photos', paidBk?.paymentStatus === 'paid' && paidBk?.photos?.length === 2);
+
+  ok('paid booking refuses re-checkout', (await post(`/api/payments/checkout/${adaBid}`, {}, { Cookie: loginCookie })).status === 400);
+
   // ── Site settings (admin feature toggles) ────────────────────────
   const s0 = await (await get('/api/settings')).json();
   ok('settings default OFF', s0.settings.showGuarantee === false && s0.settings.showSpecials === false);

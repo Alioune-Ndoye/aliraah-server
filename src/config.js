@@ -55,6 +55,12 @@ export const config = {
     cacheTtlMs: (Number(process.env.GOOGLE_CACHE_TTL_MIN) || 360) * 60 * 1000,
   },
 
+  // ── Payments (Stripe) — scaffolded, disabled until keys are set ────
+  stripe: {
+    secretKey: (process.env.STRIPE_SECRET_KEY || '').trim(),
+    webhookSecret: (process.env.STRIPE_WEBHOOK_SECRET || '').trim(),
+  },
+
   // ── Owner SMS alerts via carrier email-to-SMS gateway (no Twilio) ──
   // Sends a text straight to your phone through your carrier's free
   // email-to-SMS gateway. Requires SMTP creds to send the email.
