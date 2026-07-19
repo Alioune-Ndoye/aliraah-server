@@ -12,6 +12,7 @@ process.env.JWT_SECRET = 'test-jwt-secret-value';
 process.env.NODE_ENV = 'test';
 process.env.PORT = '4555';
 process.env.WRITE_LIMIT_MAX = '100'; // suite fires many submissions from one IP
+process.env.AUTH_LIMIT_MAX = '100';
 // Never send real owner alerts (SMS/email) from tests — blank out providers
 // even if the local .env has them configured.
 process.env.TEXTBELT_KEY = '';
@@ -198,6 +199,21 @@ try {
   const editedBody = await edited.json();
   ok('admin sets tier/discount/recurring', edited.status === 200 && editedBody.customer.tier === 'gold' && editedBody.customer.discountRate === 15 && editedBody.customer.recurring === true);
   ok('admin response hides passwordHash', !('passwordHash' in editedBody.customer));
+
+  // ── Admin approve fallback (activate accounts without SMS codes) ──
+  const bobSu = await post('/api/auth/signup', { firstName: 'Bob', email: 'bob@example.com', password: 'bobSecret123!' });
+  ok('second signup pending', bobSu.status === 201 && (await bobSu.json()).pending === true);
+
+  const bobList = await (await get('/api/admin/customers?q=bob', auth2)).json();
+  const bob = bobList.customers.find((c) => c.email === 'bob@example.com');
+  ok('admin sees pending customer (verified:false)', bob && bob.verified === false);
+
+  const appr = await fetch(`${base}/api/admin/customers/${bob.id}/approve`, { method: 'POST', headers: auth2 });
+  ok('admin approves without code', appr.status === 200 && (await appr.json()).customer.verified === true);
+  ok('approve needs admin auth', (await fetch(`${base}/api/admin/customers/${bob.id}/approve`, { method: 'POST' })).status === 401);
+
+  const bobLogin = await post('/api/auth/login', { email: 'bob@example.com', password: 'bobSecret123!' });
+  ok('approved customer logs in (no code ever entered)', bobLogin.status === 200 && cookieOf(bobLogin).startsWith('aliraah_session='));
 
   // logout clears the session
   const lo = await post('/api/auth/logout', {}, { Cookie: loginCookie });

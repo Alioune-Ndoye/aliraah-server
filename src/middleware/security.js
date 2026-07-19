@@ -38,10 +38,11 @@ export const baseLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-/** Limiter for signup/login — slows credential stuffing & brute force. */
+/** Limiter for signup/login — slows credential stuffing & brute force.
+ *  AUTH_LIMIT_MAX is only overridden by the test runner. */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 12,
+  max: Number(process.env.AUTH_LIMIT_MAX) || 12,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts. Please try again later.' },

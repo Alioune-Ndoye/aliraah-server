@@ -27,6 +27,26 @@ adminCustomersRouter.get('/', adminAuthLimiter, requireAdmin, async (req, res, n
   }
 });
 
+// POST /api/admin/customers/:id/approve — activate an account without the
+// SMS access code. The owner's manual fallback for when texting is down:
+// pending signups get approved with one click from the dashboard.
+adminCustomersRouter.post('/:id/approve', adminAuthLimiter, requireAdmin, async (req, res, next) => {
+  try {
+    if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+    const c = await Customer.findById(req.params.id);
+    if (!c) return res.status(404).json({ error: 'Not found' });
+    if (!c.verified) {
+      c.verified = true;
+      c.verifyCodeHash = '';
+      c.verifyCodeExpires = undefined;
+      await c.save();
+    }
+    res.json({ ok: true, customer: c.toPublic() });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/admin/customers/:id — profile + that customer's bookings.
 adminCustomersRouter.get('/:id', adminAuthLimiter, requireAdmin, async (req, res, next) => {
   try {
